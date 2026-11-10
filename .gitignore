@@ -1,0 +1,13 @@
+# Cấu hình cục bộ của Claude Code (chứa đường dẫn riêng trên máy)
+.claude/
+
+# File sao lưu dữ liệu cá nhân — không đưa lên GitHub
+*.json
+!package.json
+*.csv
+
+# Hệ điều hành / editor
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/

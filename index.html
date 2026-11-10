@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sổ Thu Chi Gia Đình</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script>
+    // Áp dụng theme sớm để tránh nháy màn hình
+    (function () {
+      try {
+        var t = localStorage.getItem('sm-theme');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar / bottom nav -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">💰</div>
+        <div>
+          <div class="brand-name">Sổ Thu Chi</div>
+          <div class="brand-sub">Gia đình mình</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" data-view="dashboard"><span class="ni">📊</span><span>Tổng quan</span></button>
+        <button class="nav-item" data-view="transactions"><span class="ni">🧾</span><span>Giao dịch</span></button>
+        <button class="nav-item" data-view="savings"><span class="ni">🐷</span><span>Tiết kiệm</span></button>
+        <button class="nav-item" data-view="settings"><span class="ni">⚙️</span><span>Cài đặt</span></button>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="theme-switch" role="group" aria-label="Giao diện">
+          <button data-theme-set="light" title="Giao diện Sáng">☀️ Sáng</button>
+          <button data-theme-set="dark" title="Giao diện Tối">🌙 Tối</button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1 id="view-title">Tổng quan</h1>
+          <p class="muted" id="view-sub">Tình hình tài chính trong tháng</p>
+          <span class="sync-pill" id="sync-pill"></span>
+        </div>
+        <div class="topbar-actions">
+          <div class="month-picker">
+            <button class="icon-btn" id="prev-month" aria-label="Tháng trước">‹</button>
+            <span id="month-label">Tháng</span>
+            <button class="icon-btn" id="next-month" aria-label="Tháng sau">›</button>
+          </div>
+          <button class="icon-btn theme-mobile" id="theme-toggle-mobile" aria-label="Đổi giao diện">🌓</button>
+          <button class="btn primary" id="add-btn">＋ <span class="hide-sm">Thêm giao dịch</span></button>
+        </div>
+      </header>
+
+      <!-- DASHBOARD -->
+      <section class="view active" id="view-dashboard">
+        <div class="kpis">
+          <div class="card kpi">
+            <div class="kpi-label"><span class="dot" style="background:var(--s-income)"></span>Tổng thu</div>
+            <div class="kpi-value" id="kpi-income">0 ₫</div>
+            <div class="kpi-delta" id="kpi-income-delta"></div>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-label"><span class="dot" style="background:var(--s-expense)"></span>Tổng chi</div>
+            <div class="kpi-value" id="kpi-expense">0 ₫</div>
+            <div class="kpi-delta" id="kpi-expense-delta"></div>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-label">Còn lại trong tháng</div>
+            <div class="kpi-value" id="kpi-balance">0 ₫</div>
+            <div class="kpi-delta" id="kpi-balance-note"></div>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-label"><span class="dot" style="background:var(--s-saving)"></span>Tổng tiết kiệm</div>
+            <div class="kpi-value" id="kpi-saving">0 ₫</div>
+            <div class="kpi-delta" id="kpi-saving-note"></div>
+          </div>
+        </div>
+
+        <div class="card budget-card" id="budget-card">
+          <div class="budget-head">
+            <div><strong>Ngân sách chi tiêu tháng</strong> <span class="muted" id="budget-text"></span></div>
+            <span class="badge" id="budget-badge"></span>
+          </div>
+          <div class="progress"><div class="progress-bar" id="budget-bar"></div></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head">
+              <h3>Chi tiêu theo danh mục</h3>
+              <span class="muted small" id="donut-sub"></span>
+            </div>
+            <div class="donut-wrap">
+              <div class="donut-canvas">
+                <canvas id="chart-donut"></canvas>
+                <div class="donut-center">
+                  <div class="muted small">Tổng chi</div>
+                  <div class="donut-total" id="donut-total">0 ₫</div>
+                </div>
+              </div>
+              <ul class="cat-legend" id="cat-legend"></ul>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <h3>Thu &amp; chi 6 tháng gần nhất</h3>
+            </div>
+            <div class="legend-row">
+              <span><i class="sw" style="background:var(--s-income)"></i>Thu</span>
+              <span><i class="sw" style="background:var(--s-expense)"></i>Chi</span>
+            </div>
+            <div class="chart-box"><canvas id="chart-bar"></canvas></div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head">
+              <h3>Chi tiêu tích lũy theo ngày</h3>
+            </div>
+            <div class="legend-row">
+              <span><i class="sw" style="background:var(--s-expense)"></i>Tháng này</span>
+              <span><i class="sw dashed"></i>Tháng trước</span>
+            </div>
+            <div class="chart-box"><canvas id="chart-line"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <h3>Giao dịch gần đây</h3>
+              <button class="link-btn" data-goto="transactions">Xem tất cả →</button>
+            </div>
+            <ul class="tx-list" id="recent-list"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- TRANSACTIONS -->
+      <section class="view" id="view-transactions">
+        <div class="card filters">
+          <input type="search" id="f-search" placeholder="🔍 Tìm theo ghi chú..." />
+          <select id="f-type">
+            <option value="">Tất cả loại</option>
+            <option value="income">Khoản thu</option>
+            <option value="expense">Khoản chi</option>
+          </select>
+          <select id="f-cat"><option value="">Tất cả danh mục</option></select>
+          <select id="f-member"><option value="">Cả nhà</option></select>
+        </div>
+        <div class="card">
+          <div class="tx-summary" id="tx-summary"></div>
+          <ul class="tx-list grouped" id="tx-list"></ul>
+        </div>
+      </section>
+
+      <!-- SAVINGS -->
+      <section class="view" id="view-savings">
+        <div class="kpis kpis-3">
+          <div class="card kpi">
+            <div class="kpi-label"><span class="dot" style="background:var(--s-saving)"></span>Tổng tiết kiệm</div>
+            <div class="kpi-value" id="sv-total">0 ₫</div>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-label">Gửi thêm trong tháng</div>
+            <div class="kpi-value" id="sv-month">0 ₫</div>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-label">Tỷ lệ tiết kiệm / thu nhập</div>
+            <div class="kpi-value" id="sv-rate">0%</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h3>Quỹ tiết kiệm theo thời gian</h3>
+          </div>
+          <div class="chart-box tall"><canvas id="chart-saving"></canvas></div>
+        </div>
+
+        <div class="section-head">
+          <h3>Mục tiêu tiết kiệm</h3>
+          <div class="row-gap">
+            <button class="btn" id="add-deposit-btn">＋ Gửi / rút tiền</button>
+            <button class="btn primary" id="add-goal-btn">＋ Mục tiêu mới</button>
+          </div>
+        </div>
+        <div class="goals" id="goals"></div>
+
+        <div class="card">
+          <div class="card-head"><h3>Lịch sử gửi / rút</h3></div>
+          <ul class="tx-list" id="deposit-list"></ul>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="view" id="view-settings">
+        <div class="grid-2">
+          <div class="card">
+            <h3>Thành viên</h3>
+            <p class="muted small">Tên hiển thị của 2 vợ chồng.</p>
+            <label class="field"><span>Người thứ nhất</span><input id="m1" type="text" /></label>
+            <label class="field"><span>Người thứ hai</span><input id="m2" type="text" /></label>
+            <h3 style="margin-top:20px">Ngân sách chi tiêu mỗi tháng</h3>
+            <label class="field"><span>Số tiền (để trống nếu không dùng)</span><input id="budget-input" type="text" inputmode="numeric" class="money" placeholder="VD: 15.000.000" /></label>
+            <button class="btn primary" id="save-settings">Lưu cài đặt</button>
+          </div>
+          <div class="card">
+            <h3>Sao lưu &amp; đồng bộ dữ liệu</h3>
+            <p class="muted small" id="backup-note"></p>
+            <div class="stack">
+              <button class="btn" id="export-btn">⬇️ Xuất dữ liệu (JSON)</button>
+              <button class="btn" id="export-csv-btn">⬇️ Xuất giao dịch (CSV / Excel)</button>
+              <label class="btn file-btn">⬆️ Nhập dữ liệu từ file<input type="file" id="import-file" accept="application/json,.json" hidden /></label>
+              <button class="btn" id="sample-btn">✨ Tạo dữ liệu mẫu để xem thử</button>
+              <button class="btn danger" id="reset-btn">🗑️ Xóa toàn bộ dữ liệu</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal giao dịch -->
+  <dialog id="tx-modal" class="modal">
+    <form method="dialog" id="tx-form">
+      <h3 id="tx-modal-title">Thêm giao dịch</h3>
+      <div class="seg" id="tx-type-seg">
+        <button type="button" data-type="expense" class="active">Khoản chi</button>
+        <button type="button" data-type="income">Khoản thu</button>
+      </div>
+      <label class="field"><span>Số tiền (₫)</span><input id="tx-amount" class="money big" type="text" inputmode="numeric" placeholder="0" required /></label>
+      <div class="field"><span>Danh mục</span><div class="cat-grid" id="tx-cat-grid"></div></div>
+      <div class="row-2">
+        <label class="field"><span>Ngày</span><input id="tx-date" type="date" required /></label>
+        <label class="field"><span>Người ghi</span><select id="tx-member"></select></label>
+      </div>
+      <label class="field"><span>Ghi chú</span><input id="tx-note" type="text" placeholder="VD: Đi chợ cuối tuần" /></label>
+      <div class="modal-actions">
+        <button type="button" class="btn danger ghost" id="tx-delete" hidden>Xóa</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" data-close>Hủy</button>
+        <button type="submit" class="btn primary">Lưu</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modal mục tiêu -->
+  <dialog id="goal-modal" class="modal">
+    <form method="dialog" id="goal-form">
+      <h3 id="goal-modal-title">Mục tiêu tiết kiệm</h3>
+      <label class="field"><span>Tên mục tiêu</span><input id="goal-name" type="text" placeholder="VD: Quỹ khẩn cấp, Mua nhà, Du lịch..." required /></label>
+      <div class="row-2">
+        <label class="field"><span>Số tiền mục tiêu (₫)</span><input id="goal-target" class="money" type="text" inputmode="numeric" required /></label>
+        <label class="field"><span>Hạn hoàn thành</span><input id="goal-deadline" type="date" /></label>
+      </div>
+      <div class="field"><span>Biểu tượng</span><div class="icon-pick" id="goal-icons"></div></div>
+      <div class="modal-actions">
+        <button type="button" class="btn danger ghost" id="goal-delete" hidden>Xóa</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" data-close>Hủy</button>
+        <button type="submit" class="btn primary">Lưu</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modal gửi/rút -->
+  <dialog id="dep-modal" class="modal">
+    <form method="dialog" id="dep-form">
+      <h3>Gửi / rút tiền tiết kiệm</h3>
+      <div class="seg" id="dep-type-seg">
+        <button type="button" data-type="in" class="active">Gửi vào</button>
+        <button type="button" data-type="out">Rút ra</button>
+      </div>
+      <label class="field"><span>Mục tiêu</span><select id="dep-goal" required></select></label>
+      <label class="field"><span>Số tiền (₫)</span><input id="dep-amount" class="money big" type="text" inputmode="numeric" required /></label>
+      <div class="row-2">
+        <label class="field"><span>Ngày</span><input id="dep-date" type="date" required /></label>
+        <label class="field"><span>Người gửi</span><select id="dep-member"></select></label>
+      </div>
+      <label class="field"><span>Ghi chú</span><input id="dep-note" type="text" /></label>
+      <div class="modal-actions">
+        <button type="button" class="btn danger ghost" id="dep-delete" hidden>Xóa</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" data-close>Hủy</button>
+        <button type="submit" class="btn primary">Lưu</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modal xác nhận -->
+  <dialog id="confirm-modal" class="modal modal-sm">
+    <h3>Xác nhận</h3>
+    <p id="confirm-text" class="confirm-text"></p>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button type="button" class="btn" data-close>Hủy</button>
+      <button type="button" class="btn primary danger-fill" id="confirm-ok">Đồng ý</button>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
