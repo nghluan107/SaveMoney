@@ -17,11 +17,30 @@ Mở file `index.html` bằng trình duyệt là chạy, không cần cài đặ
 
 Dữ liệu được lưu trong trình duyệt (localStorage) của từng máy. Để dùng chung giữa hai máy, vào **Cài đặt → Xuất dữ liệu** rồi **Nhập dữ liệu từ file** trên máy kia.
 
+## Đồng bộ giữa hai vợ chồng (Firebase)
+
+Khi `firebase-config.js` có cấu hình, web yêu cầu đăng nhập Google và lưu dữ liệu trên Firebase Firestore: một người cập nhật thì người kia thấy ngay.
+
+1. Vào https://console.firebase.google.com → **Create a project** (tắt Google Analytics cũng được).
+2. **Build → Authentication → Get started → Sign-in method → Google → Enable → Save.**
+3. **Authentication → Settings → Authorized domains → Add domain:** `nghluan107.github.io`.
+4. **Build → Firestore Database → Create database** → chọn vùng `asia-southeast1` (Singapore) → **Start in production mode**.
+5. **Firestore → Rules:** dán nội dung file `firestore.rules`, thay 2 email mẫu bằng email Google của vợ và chồng → **Publish**.
+6. **Project settings (⚙️) → Your apps → Web (`</>`)** → đặt tên → **Register app** → sao chép đoạn `firebaseConfig` vào `firebase-config.js`:
+   ```js
+   window.FIREBASE_CONFIG = { apiKey: "...", authDomain: "...", projectId: "...", storageBucket: "...", messagingSenderId: "...", appId: "..." };
+   ```
+7. `git push` → mở web, đăng nhập Google. Vào **Cài đặt → Đưa dữ liệu đang có trên máy này lên kho chung** nếu đã nhập dữ liệu trước đó.
+
+Các giá trị trong `firebaseConfig` không phải mật khẩu; dữ liệu được bảo vệ bằng Firestore Rules (chỉ 2 email trong danh sách mới đọc/ghi được).
+
 ## Cấu trúc
 
 | File | Nội dung |
 |---|---|
 | `index.html` | Bố cục trang |
 | `styles.css` | Giao diện, màu Sáng / Tối |
-| `app.js` | Xử lý dữ liệu, biểu đồ |
+| `app.js` | Xử lý dữ liệu, biểu đồ, đồng bộ |
+| `firebase-config.js` | Cấu hình Firebase (để `null` nếu chỉ lưu trên máy) |
+| `firestore.rules` | Quy tắc chỉ cho 2 email vợ chồng truy cập dữ liệu |
 | `build.ps1` | Gộp 3 file trên thành `dist/so-thu-chi.html` (một file duy nhất) |

@@ -308,6 +308,20 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
 .confirm-text { color: var(--text-2); margin: 0 0 16px; }
 .btn.primary.danger-fill { background: var(--bad); color: #fff; }
 
+.login-screen {
+  position: fixed; inset: 0; z-index: 40; background: var(--bg);
+  display: grid; place-items: center; padding: 16px;
+}
+.login-card {
+  width: min(380px, 100%); text-align: center; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 20px; padding: 32px 24px; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+}
+.login-card h2 { font-size: 22px; }
+.brand-logo.big { width: 64px; height: 64px; font-size: 34px; border-radius: 18px; }
+.login-btn { width: 100%; padding: 12px; }
+.account-box { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px; border-radius: 12px; background: var(--surface-2); margin-top: 12px; }
+
 .toast {
   position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 20px);
   background: var(--text); color: var(--surface); padding: 10px 18px; border-radius: 12px;

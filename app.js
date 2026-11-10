@@ -94,16 +94,79 @@
     renderTimer = setTimeout(renderView, 60);
   }
 
+  let unsubs = [];
+  let fbUser = null;
+
   async function initStore() {
-    if (!IN_ARTIFACT) { setSync('local'); return; }
-    setSync('loading');
-    let cap = null;
-    try { cap = await window.claude.use('db'); } catch (e) { cap = null; }
-    if (!cap) {
-      // Không có kho chung (ví dụ chưa đăng nhập): dùng tạm bộ nhớ trình duyệt
-      state = load(); setSync('local'); renderView(); return;
+    if (IN_ARTIFACT) {
+      setSync('loading');
+      let cap = null;
+      try { cap = await window.claude.use('db'); } catch (e) { cap = null; }
+      if (!cap) { state = load(); setSync('local'); renderView(); return; }
+      db = cap; mode = 'cloud';
+      subscribeAll();
+      return;
     }
-    db = cap; mode = 'cloud';
+    if (USE_FIREBASE) { initFirebase(); return; }
+    setSync('local');
+  }
+
+  // ---------- Firebase (dùng khi web chạy trên GitHub Pages) ----------
+  const USE_FIREBASE = !IN_ARTIFACT && !!window.FIREBASE_CONFIG && !!window.firebase;
+
+  function showLogin(msg, opts) {
+    const o = opts || {};
+    $('#login-screen').hidden = false;
+    $('#login-msg').textContent = msg;
+    $('#login-btn').hidden = !!o.hideButton;
+    $('#login-switch').hidden = !o.showSwitch;
+  }
+
+  function initFirebase() {
+    firebase.initializeApp(window.FIREBASE_CONFIG);
+    const auth = firebase.auth();
+    const fs = firebase.firestore();
+    try { fs.settings({ ignoreUndefinedProperties: true, merge: true }); } catch (e) { /* ignore */ }
+    // Lưu tạm trên máy để mở nhanh và dùng được khi mất mạng
+    fs.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+    db = fs;
+    showLogin('Đang kiểm tra đăng nhập…', { hideButton: true });
+
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    $('#login-btn').addEventListener('click', async () => {
+      try { await auth.signInWithPopup(provider); }
+      catch (e) {
+        if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment')) {
+          auth.signInWithRedirect(provider);
+        } else if (e && e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
+          toast('⚠️ Đăng nhập không thành công, hãy thử lại');
+        }
+      }
+    });
+    $('#login-switch').addEventListener('click', () => auth.signOut());
+    $('#logout-btn').addEventListener('click', async () => {
+      if (await askConfirm('Đăng xuất khỏi tài khoản này?', 'Đăng xuất')) auth.signOut();
+    });
+
+    auth.onAuthStateChanged((user) => {
+      unsubs.forEach((u) => u()); unsubs = [];
+      fbUser = user;
+      if (!user) {
+        mode = 'local'; state = defaultState(); renderView();
+        showLogin('Đăng nhập để xem và ghi chép thu chi chung của gia đình.');
+        return;
+      }
+      $('#login-screen').hidden = true;
+      mode = 'cloud';
+      state = defaultState();
+      subscribeAll();
+      renderView();
+    });
+  }
+
+  function subscribeAll() {
+    setSync('loading');
     const pending = new Set([...COLLS, 'settings']);
     const timer = setTimeout(() => setSync('slow'), 10000);
     const done = (name, snap) => {
@@ -111,38 +174,52 @@
       pending.delete(name);
       if (!pending.size) { clearTimeout(timer); setSync(canWrite ? 'cloud' : 'readonly'); }
     };
-    const onErr = () => { clearTimeout(timer); setSync('error'); };
+    const onErr = (e) => {
+      clearTimeout(timer);
+      if (USE_FIREBASE && e && e.code === 'permission-denied') {
+        unsubs.forEach((u) => u()); unsubs = [];
+        showLogin(`Tài khoản ${fbUser ? fbUser.email : ''} không có quyền xem sổ thu chi này. Hãy đăng nhập bằng email của chồng hoặc vợ.`, { hideButton: true, showSwitch: true });
+        return;
+      }
+      setSync('error');
+    };
     COLLS.forEach((name) => {
-      db.collection(name).onSnapshot((snap) => {
+      unsubs.push(db.collection(name).onSnapshot((snap) => {
         state[name] = snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
         done(name, snap);
         scheduleRender();
-      }, onErr);
+      }, onErr));
     });
-    db.doc('settings/main').onSnapshot((snap) => {
+    unsubs.push(db.doc('settings/main').onSnapshot((snap) => {
       const d = snap.exists ? snap.data() : {};
       state.members = Array.isArray(d.members) && d.members.length ? [...d.members] : ['Chồng', 'Vợ'];
       state.budget = Number(d.budget) || 0;
       done('settings', snap);
       scheduleRender();
-    }, onErr);
+    }, onErr));
   }
 
   async function guard(promise) {
     try { await promise; return true; }
     catch (e) {
       const code = e && e.code;
-      if (code === 'invalid_argument') { canWrite = false; setSync('readonly'); toast('👀 Bạn chỉ có quyền xem, không sửa được dữ liệu'); }
+      if (code === 'invalid_argument' || code === 'permission-denied') { canWrite = false; setSync('readonly'); toast('👀 Bạn chỉ có quyền xem, không sửa được dữ liệu'); }
       else if (code === 'quota_exceeded') toast('⚠️ Kho dữ liệu đã đầy, hãy xóa bớt dữ liệu cũ');
       else toast('⚠️ Chưa lưu được, hãy thử lại');
       return false;
     }
   }
 
+  // Firebase giữ thay đổi trên máy và tự gửi lên khi có mạng, nên không chờ máy chủ trả lời
+  function write(p) {
+    if (USE_FIREBASE) { guard(p); return Promise.resolve(true); }
+    return guard(p);
+  }
+
   async function upsert(coll, obj) {
     if (mode === 'cloud') {
       const body = Object.assign({}, obj); delete body.id;
-      return guard(db.collection(coll).doc(obj.id).set(body));
+      return write(db.collection(coll).doc(obj.id).set(body));
     }
     const arr = state[coll];
     const i = arr.findIndex((x) => x.id === obj.id);
@@ -152,14 +229,14 @@
   }
 
   async function removeDoc(coll, id) {
-    if (mode === 'cloud') return guard(db.collection(coll).doc(id).delete());
+    if (mode === 'cloud') return write(db.collection(coll).doc(id).delete());
     state[coll] = state[coll].filter((x) => x.id !== id);
     save(); renderView();
     return true;
   }
 
   async function saveSettingsData(members, budget) {
-    if (mode === 'cloud') return guard(db.doc('settings/main').set({ members, budget }));
+    if (mode === 'cloud') return write(db.doc('settings/main').set({ members, budget }));
     state.members = members; state.budget = budget;
     save(); renderView();
     return true;
@@ -713,8 +790,13 @@
     $('#m2').value = state.members[1] || '';
     $('#budget-input').value = state.budget ? nf.format(state.budget) : '';
     $('#backup-note').textContent = mode === 'cloud'
-      ? 'Dữ liệu được lưu chung trên claude.ai: vợ chồng mở cùng một đường link là thấy cùng số liệu. Vẫn nên xuất file sao lưu định kỳ.'
+      ? 'Dữ liệu được lưu chung trên mạng và tự đồng bộ: vợ hoặc chồng cập nhật thì người kia thấy ngay. Vẫn nên xuất file sao lưu định kỳ.'
       : 'Dữ liệu được lưu ngay trên trình duyệt này. Hãy xuất file sao lưu thường xuyên, và nhập file đó trên máy của vợ/chồng để dùng chung dữ liệu.';
+    $('#account-box').hidden = !fbUser;
+    if (fbUser) $('#account-email').textContent = fbUser.email || '';
+    let localHas = false;
+    try { const raw = localStorage.getItem(STORE_KEY); localHas = !!raw && (JSON.parse(raw).transactions || []).length > 0; } catch (e) { /* ignore */ }
+    $('#migrate-btn').hidden = !(mode === 'cloud' && localHas);
   }
 
   // =========================================================
@@ -981,6 +1063,17 @@
       if (state.transactions.length && !(await askConfirm('Dữ liệu mẫu sẽ THAY THẾ toàn bộ dữ liệu hiện tại. Tiếp tục?', 'Tạo dữ liệu mẫu'))) return;
       viewY = now.getFullYear(); viewM = now.getMonth();
       if (await replaceAll(makeSample())) { switchView('dashboard'); toast('✨ Đã tạo dữ liệu mẫu'); }
+    });
+    $('#migrate-btn').addEventListener('click', async () => {
+      let local;
+      try { local = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) { local = null; }
+      if (!local || !Array.isArray(local.transactions)) { toast('Không tìm thấy dữ liệu trên máy này'); return; }
+      const msg = `Đưa ${local.transactions.length} giao dịch, ${(local.goals || []).length} mục tiêu trên máy này lên kho chung? Dữ liệu đang có trong kho chung sẽ bị THAY THẾ.`;
+      if (!(await askConfirm(msg, 'Đưa lên kho chung'))) return;
+      if (await replaceAll(Object.assign(defaultState(), local))) {
+        try { localStorage.removeItem(STORE_KEY); } catch (e) { /* ignore */ }
+        toast('✓ Đã đưa dữ liệu lên kho chung'); renderView();
+      }
     });
     $('#reset-btn').addEventListener('click', async () => {
       if (!(await askConfirm('Xóa TOÀN BỘ giao dịch, mục tiêu và tiền tiết kiệm? Không thể hoàn tác nếu chưa xuất file sao lưu.', 'Xóa toàn bộ'))) return;
