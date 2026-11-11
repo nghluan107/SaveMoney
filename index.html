@@ -174,10 +174,15 @@
 
       <!-- SAVINGS -->
       <section class="view" id="view-savings">
-        <div class="kpis kpis-3">
+        <div class="kpis">
           <div class="card kpi">
             <div class="kpi-label"><span class="dot" style="background:var(--s-saving)"></span>Tổng tiết kiệm</div>
             <div class="kpi-value" id="sv-total">0 ₫</div>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-label">Lãi dự kiến (sổ đang gửi)</div>
+            <div class="kpi-value" id="sv-interest" style="color:var(--good)">0 ₫</div>
+            <div class="kpi-delta" id="sv-interest-note"></div>
           </div>
           <div class="card kpi">
             <div class="kpi-label">Gửi thêm trong tháng</div>
@@ -194,6 +199,17 @@
             <h3>Quỹ tiết kiệm theo thời gian</h3>
           </div>
           <div class="chart-box tall"><canvas id="chart-saving"></canvas></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head"><h3>Tiền đang gửi ở đâu</h3></div>
+            <ul class="place-list" id="place-list"></ul>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Sổ tiết kiệm có kỳ hạn</h3></div>
+            <ul class="tx-list" id="book-list"></ul>
+          </div>
         </div>
 
         <div class="section-head">
@@ -301,7 +317,47 @@
         <label class="field"><span>Ngày</span><input id="dep-date" type="date" required /></label>
         <label class="field"><span>Người gửi</span><select id="dep-member"></select></label>
       </div>
+      <div class="row-2">
+        <label class="field"><span id="dep-place-label">Gửi ở đâu</span>
+          <select id="dep-place">
+            <option value="bank">🏦 Ngân hàng</option>
+            <option value="home">🔐 Két sắt / tại nhà</option>
+            <option value="app">📱 Ví điện tử / App</option>
+            <option value="gold">🪙 Vàng</option>
+            <option value="other">📦 Khác</option>
+          </select>
+        </label>
+        <label class="field" id="dep-bank-field"><span id="dep-bank-label">Tên ngân hàng</span>
+          <input id="dep-bank" type="text" list="bank-names" placeholder="VD: Vietcombank" autocomplete="off" />
+        </label>
+      </div>
+      <div class="row-2" id="dep-interest-row">
+        <label class="field"><span>Kỳ hạn</span>
+          <select id="dep-term">
+            <option value="0">Không kỳ hạn</option>
+            <option value="1">1 tháng</option>
+            <option value="3">3 tháng</option>
+            <option value="6">6 tháng</option>
+            <option value="9">9 tháng</option>
+            <option value="12">12 tháng</option>
+            <option value="13">13 tháng</option>
+            <option value="18">18 tháng</option>
+            <option value="24">24 tháng</option>
+            <option value="36">36 tháng</option>
+          </select>
+        </label>
+        <label class="field"><span>Lãi suất (%/năm)</span><input id="dep-rate" type="text" inputmode="decimal" placeholder="VD: 4,8" /></label>
+      </div>
+      <p class="muted small" id="dep-interest-preview" hidden></p>
       <label class="field"><span>Ghi chú</span><input id="dep-note" type="text" /></label>
+      <datalist id="bank-names">
+        <option value="Vietcombank"></option><option value="VietinBank"></option><option value="BIDV"></option><option value="Agribank"></option>
+        <option value="Techcombank"></option><option value="MB Bank"></option><option value="ACB"></option><option value="VPBank"></option>
+        <option value="Sacombank"></option><option value="TPBank"></option><option value="HDBank"></option><option value="VIB"></option>
+        <option value="SHB"></option><option value="OCB"></option><option value="MSB"></option><option value="SeABank"></option>
+        <option value="Eximbank"></option><option value="LPBank"></option><option value="Nam A Bank"></option><option value="Cake by VPBank"></option>
+        <option value="Timo"></option><option value="MoMo"></option><option value="ZaloPay"></option>
+      </datalist>
       <div class="modal-actions">
         <button type="button" class="btn danger ghost" id="dep-delete" hidden>Xóa</button>
         <span class="spacer"></span>

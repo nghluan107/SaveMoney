@@ -325,6 +325,45 @@
       .reduce((s, d) => s + d.amount, 0);
   }
 
+  // ---------- Nơi gửi & lãi suất ----------
+  const PLACES = {
+    bank: { icon: '🏦', name: 'Ngân hàng' },
+    home: { icon: '🔐', name: 'Két sắt / tại nhà' },
+    app: { icon: '📱', name: 'Ví điện tử / App' },
+    gold: { icon: '🪙', name: 'Vàng' },
+    other: { icon: '📦', name: 'Khác' },
+  };
+  const hasInterest = (place) => place === 'bank' || place === 'app';
+  // Tên hiển thị của nơi gửi, VD "Vietcombank" hoặc "Két sắt / tại nhà"
+  function placeLabel(d) {
+    if (!d.place) return 'Chưa ghi nơi gửi';
+    const p = PLACES[d.place] || PLACES.other;
+    return d.place !== 'home' && d.bank ? d.bank : p.name;
+  }
+  function placeIcon(d) { return d.place ? (PLACES[d.place] || PLACES.other).icon : '❔'; }
+  function addMonths(dateStr, n) {
+    const [y, m, dd] = dateStr.split('-').map(Number);
+    // Giữ nguyên ngày; nếu tháng đích ngắn hơn thì lấy ngày cuối tháng (VD 31/01 + 1 tháng = 28/02)
+    const lastDay = new Date(y, m + n, 0).getDate();
+    return ymd(new Date(y, m - 1 + n, Math.min(dd, lastDay)));
+  }
+  const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
+  // Lãi đơn, trả cuối kỳ (cách tính phổ biến của sổ tiết kiệm ngân hàng)
+  function interestInfo(d) {
+    if (!(d.amount > 0) || !hasInterest(d.place) || !(d.rate > 0)) return null;
+    const today = ymd(now);
+    if (d.term > 0) {
+      const maturity = addMonths(d.date, d.term);
+      const interest = d.amount * (d.rate / 100) * (daysBetween(d.date, maturity) / 365);
+      return { maturity, interest, daysLeft: daysBetween(today, maturity), term: d.term };
+    }
+    // Không kỳ hạn: lãi tạm tính tới hôm nay
+    const days = Math.max(0, daysBetween(d.date, today));
+    return { maturity: null, interest: d.amount * (d.rate / 100) * (days / 365), daysLeft: null, term: 0 };
+  }
+  const fmtRate = (r) => String(r).replace('.', ',') + '%';
+  const fmtDate = (s) => s.split('-').reverse().join('/');
+
   function toast(msg) {
     const el = $('#toast');
     el.textContent = msg;
@@ -717,6 +756,7 @@
     $('#sv-total').textContent = fmt(total);
     $('#sv-month').textContent = (depM > 0 ? '+' : '') + fmt(depM);
     $('#sv-rate').textContent = inc ? Math.round((depM / inc) * 100) + '%' : '—';
+    renderPlacesAndBooks();
 
     // chart 12 tháng
     const labels = [], data = [], added = [];
@@ -790,11 +830,65 @@
         return `<li class="tx-item" data-dep="${d.id}">
           <div class="tx-icon" style="background:color-mix(in srgb, var(--s-saving) 16%, transparent)">${goal ? goal.icon : '🐷'}</div>
           <div style="min-width:0"><div class="tx-title">${esc(d.note) || (isIn ? 'Gửi tiết kiệm' : 'Rút tiết kiệm')}</div>
-          <div class="tx-meta">${goal ? esc(goal.name) : 'Không rõ'} · ${esc(memberName(d.member))} · ${d.date.split('-').reverse().join('/')}</div></div>
+          <div class="tx-meta">${goal ? esc(goal.name) : 'Không rõ'} · ${d.place ? placeIcon(d) + ' ' + esc(placeLabel(d)) + ' · ' : ''}${isIn && d.term ? d.term + ' th · ' : ''}${isIn && d.rate && hasInterest(d.place) ? fmtRate(d.rate) + ' · ' : ''}${esc(memberName(d.member))} · ${fmtDate(d.date)}</div></div>
           <div class="tx-amt ${isIn ? 'in' : ''}">${isIn ? '+' : '−'}${fmt(Math.abs(d.amount))}</div>
         </li>`;
       }).join('')
       : '<li class="empty">Chưa có lần gửi tiền nào</li>';
+  }
+
+  function renderPlacesAndBooks() {
+    const today = ymd(now);
+    // Tiền đang nằm ở đâu (gộp gửi và rút theo nơi gửi)
+    const groups = new Map();
+    state.deposits.filter((d) => d.date <= today).forEach((d) => {
+      const key = (d.place || '') + '|' + (d.place && d.place !== 'home' ? (d.bank || '').trim().toLowerCase() : '');
+      const g = groups.get(key) || { icon: placeIcon(d), label: placeLabel(d), amount: 0, count: 0 };
+      g.amount += d.amount; g.count++;
+      groups.set(key, g);
+    });
+    const places = [...groups.values()].filter((g) => Math.round(g.amount) !== 0).sort((a, b) => b.amount - a.amount);
+    const sum = places.reduce((s, g) => s + Math.max(0, g.amount), 0);
+    $('#place-list').innerHTML = places.length
+      ? places.map((g) => {
+        const pct = sum && g.amount > 0 ? (g.amount / sum) * 100 : 0;
+        return `<li>
+          <div class="place-top"><span class="place-name">${g.icon} ${esc(g.label)}</span>
+            <span class="place-amt">${fmt(g.amount)}<span class="muted small"> · ${pct.toFixed(0)}%</span></span></div>
+          <div class="progress thin"><div class="progress-bar" style="width:${pct}%"></div></div>
+        </li>`;
+      }).join('')
+      : '<li class="empty">Chưa có khoản tiết kiệm nào</li>';
+
+    // Sổ có lãi suất: đang gửi trước (sắp đáo hạn lên đầu), đã đáo hạn sau
+    const books = state.deposits.map((d) => ({ d, info: interestInfo(d) })).filter((x) => x.info);
+    const active = books.filter((x) => x.info.daysLeft === null || x.info.daysLeft >= 0);
+    const totalInterest = active.reduce((s, x) => s + x.info.interest, 0);
+    const principal = active.reduce((s, x) => s + x.d.amount, 0);
+    $('#sv-interest').textContent = (totalInterest > 0 ? '+' : '') + fmt(totalInterest);
+    $('#sv-interest-note').textContent = active.length ? `${active.length} sổ · gốc ${fmtShort(principal)}` : 'Chưa có sổ có lãi suất';
+
+    books.sort((a, b) => {
+      const ra = a.info.daysLeft === null ? 1e6 : a.info.daysLeft < 0 ? 2e6 - a.info.daysLeft : a.info.daysLeft;
+      const rb = b.info.daysLeft === null ? 1e6 : b.info.daysLeft < 0 ? 2e6 - b.info.daysLeft : b.info.daysLeft;
+      return ra - rb;
+    });
+    $('#book-list').innerHTML = books.length
+      ? books.map(({ d, info }) => {
+        let status;
+        if (info.daysLeft === null) status = '<span class="badge">Không kỳ hạn · lãi tạm tính</span>';
+        else if (info.daysLeft < 0) status = `<span class="badge">Đã đáo hạn ${fmtDate(info.maturity)}</span>`;
+        else if (info.daysLeft <= 30) status = `<span class="badge warn">Đáo hạn ${fmtDate(info.maturity)} · còn ${info.daysLeft} ngày</span>`;
+        else status = `<span class="badge ok">Đáo hạn ${fmtDate(info.maturity)}</span>`;
+        return `<li class="tx-item" data-dep="${d.id}">
+          <div class="tx-icon" style="background:color-mix(in srgb, var(--s-saving) 16%, transparent)">${placeIcon(d)}</div>
+          <div style="min-width:0"><div class="tx-title">${esc(placeLabel(d))} · ${fmt(d.amount)}</div>
+          <div class="tx-meta">${info.term ? info.term + ' tháng' : 'Không kỳ hạn'} · ${fmtRate(d.rate)}/năm · gửi ${fmtDate(d.date)}</div>
+          <div style="margin-top:4px">${status}</div></div>
+          <div class="tx-amt in" title="Tiền lãi dự kiến">+${fmt(info.interest)}</div>
+        </li>`;
+      }).join('')
+      : '<li class="empty">Chưa có sổ nào. Khi gửi tiền vào ngân hàng, chọn kỳ hạn và nhập lãi suất để web tính tiền lãi và ngày đáo hạn.</li>';
   }
 
   // ---------- Settings ----------
@@ -878,8 +972,39 @@
     $('#dep-date').value = d ? d.date : defaultDate();
     $('#dep-note').value = d ? d.note || '' : '';
     fillMembers($('#dep-member'), d ? d.member : lastMember());
+    $('#dep-place').value = (d && d.place) || 'bank';
+    $('#dep-bank').value = d ? d.bank || '' : '';
+    $('#dep-term').value = String((d && d.term) || 0);
+    $('#dep-rate').value = d && d.rate ? String(d.rate).replace('.', ',') : '';
+    updateDepFields();
     $('#dep-delete').hidden = !d;
     $('#dep-modal').showModal();
+  }
+  const parseRate = (s) => {
+    const n = parseFloat(String(s || '').replace(',', '.').replace(/[^\d.]/g, ''));
+    return isFinite(n) && n > 0 && n < 100 ? Math.round(n * 100) / 100 : 0;
+  };
+  // Ẩn/hiện ô theo nơi gửi và loại (gửi/rút), xem trước tiền lãi
+  function updateDepFields() {
+    const place = $('#dep-place').value;
+    const isIn = depType === 'in';
+    $('#dep-place-label').textContent = isIn ? 'Gửi ở đâu' : 'Rút từ đâu';
+    $('#dep-bank-field').hidden = place === 'home';
+    $('#dep-bank-label').textContent = place === 'bank' ? 'Tên ngân hàng' : 'Tên nơi gửi';
+    $('#dep-bank').placeholder = place === 'bank' ? 'VD: Vietcombank' : place === 'app' ? 'VD: MoMo' : place === 'gold' ? 'VD: SJC 1 lượng' : '';
+    const showInterest = isIn && hasInterest(place);
+    $('#dep-interest-row').hidden = !showInterest;
+    const info = showInterest && interestInfo({
+      amount: parseMoney($('#dep-amount').value), place, rate: parseRate($('#dep-rate').value),
+      term: Number($('#dep-term').value), date: $('#dep-date').value || ymd(now),
+    });
+    const pv = $('#dep-interest-preview');
+    pv.hidden = !info;
+    if (info) {
+      pv.innerHTML = info.term
+        ? `💡 Tiền lãi dự kiến: <b style="color:var(--good)">+${fmt(info.interest)}</b> · đáo hạn ${fmtDate(info.maturity)}`
+        : `💡 Không kỳ hạn: lãi ~<b style="color:var(--good)">${fmt(parseMoney($('#dep-amount').value) * parseRate($('#dep-rate').value) / 100 / 12)}</b>/tháng`;
+    }
   }
 
   // =========================================================
@@ -915,9 +1040,9 @@
       add('expense', 'giaitri', rnd(300e3, 1.5e6), d(18), 'Xem phim, đi chơi cuối tuần', 0);
       if (Math.random() > 0.6) add('expense', 'hieuhi', 500000, d(22), 'Đám cưới bạn', 0);
       // tiết kiệm
-      deps.push({ id: uid(), goalId: goals[0].id, amount: rnd(3e6, 4e6), date: d(11), note: 'Gửi quỹ khẩn cấp', member: 0, created: Date.now() });
-      deps.push({ id: uid(), goalId: goals[1].id, amount: rnd(4e6, 6e6), date: d(12), note: 'Tiết kiệm mua nhà', member: 1, created: Date.now() });
-      if (k > -5) deps.push({ id: uid(), goalId: goals[2].id, amount: rnd(1.5e6, 2.5e6), date: d(14), note: 'Quỹ du lịch', member: 1, created: Date.now() });
+      deps.push({ id: uid(), goalId: goals[0].id, amount: rnd(3e6, 4e6), date: d(11), note: 'Gửi quỹ khẩn cấp', place: 'home', bank: '', term: 0, rate: 0, member: 0, created: Date.now() });
+      deps.push({ id: uid(), goalId: goals[1].id, amount: rnd(4e6, 6e6), date: d(12), note: 'Tiết kiệm mua nhà', place: 'bank', bank: k % 2 ? 'Vietcombank' : 'Techcombank', term: k % 2 ? 6 : 12, rate: k % 2 ? 4.5 : 4.8, member: 1, created: Date.now() });
+      if (k > -5) deps.push({ id: uid(), goalId: goals[2].id, amount: rnd(1.5e6, 2.5e6), date: d(14), note: 'Quỹ du lịch', place: 'app', bank: 'MoMo', term: 0, rate: 3.5, member: 1, created: Date.now() });
     }
     deps.forEach((x, i) => { x.created = Date.now() + i; });
     return { members: state.members, budget: state.budget || 18000000, transactions: tx, goals, deposits: deps };
@@ -1020,12 +1145,22 @@
       const b = e.target.closest('button'); if (!b) return;
       depType = b.dataset.type;
       $$('#dep-type-seg button').forEach((x) => x.classList.toggle('active', x === b));
+      updateDepFields();
     });
+    ['#dep-place', '#dep-term', '#dep-date'].forEach((s) => $(s).addEventListener('change', updateDepFields));
+    ['#dep-amount', '#dep-rate'].forEach((s) => $(s).addEventListener('input', updateDepFields));
     $('#dep-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const amt = parseMoney($('#dep-amount').value);
       if (!amt) { toast('Vui lòng nhập số tiền'); return; }
-      const data = { goalId: $('#dep-goal').value, amount: depType === 'out' ? -amt : amt, date: $('#dep-date').value, note: $('#dep-note').value.trim(), member: Number($('#dep-member').value) };
+      const place = $('#dep-place').value;
+      const withInterest = depType === 'in' && hasInterest(place);
+      const data = {
+        goalId: $('#dep-goal').value, amount: depType === 'out' ? -amt : amt, date: $('#dep-date').value, note: $('#dep-note').value.trim(), member: Number($('#dep-member').value),
+        place, bank: place === 'home' ? '' : $('#dep-bank').value.trim(),
+        term: withInterest ? Number($('#dep-term').value) : 0,
+        rate: withInterest ? parseRate($('#dep-rate').value) : 0,
+      };
       rememberMember(data.member);
       const obj = Object.assign({}, depEditing || { id: uid(), created: Date.now() }, data);
       $('#dep-modal').close();

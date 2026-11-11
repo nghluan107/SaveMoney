@@ -263,6 +263,15 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
 .goal-amt b { font-size: 18px; color: var(--text); }
 .goal .progress-bar { background: var(--s-saving); }
 
+/* Nơi gửi tiết kiệm */
+.place-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.place-top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; margin-bottom: 6px; font-size: 14px; }
+.place-name { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.place-amt { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.progress.thin { height: 6px; }
+.place-list .progress-bar { background: var(--s-saving); }
+#book-list .badge { display: inline-block; font-size: 11.5px; padding: 2px 8px; }
+
 /* Settings */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .field > span { font-size: 13px; font-weight: 500; color: var(--text-2); }
