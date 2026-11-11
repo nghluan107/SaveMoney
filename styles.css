@@ -245,12 +245,12 @@ button, input, select { font: inherit; color: inherit; }
 .tx-summary b { color: var(--text); }
 
 .filters { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; padding: 14px; }
-input[type="text"], input[type="search"], input[type="date"], select {
+input[type="text"], input[type="search"], input[type="date"], input[type="tel"], select, textarea {
   width: 100%; padding: 10px 12px; border-radius: 10px;
   border: 1px solid var(--border); background: var(--surface-2);
   outline: none; transition: border 0.15s, box-shadow 0.15s;
 }
-input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
 /* Goals */
 .goals { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 16px; }
@@ -357,7 +357,7 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
     padding: calc(18px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(96px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
   }
   /* iPhone: chữ trong ô nhập >= 16px để Safari không tự phóng to */
-  input[type="text"], input[type="search"], input[type="date"], select { font-size: 16px; }
+  input[type="text"], input[type="search"], input[type="date"], input[type="tel"], select, textarea { font-size: 16px; }
   .theme-mobile { display: inline-grid; place-items: center; }
   .hide-sm { display: none; }
   .topbar { flex-direction: column; align-items: stretch; }
@@ -370,4 +370,75 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
   .filters { grid-template-columns: 1fr 1fr; }
   .filters input { grid-column: 1 / -1; }
   .card { padding: 16px; }
+}
+
+/* ============ Hồ sơ & nhắn tin ============ */
+textarea { font: inherit; color: inherit; resize: vertical; }
+.avatar {
+  width: 38px; height: 38px; border-radius: 50%; display: inline-grid; place-items: center; flex: none;
+  background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 15px; overflow: hidden;
+}
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar.xl { width: 64px; height: 64px; font-size: 24px; }
+.avatar.sm { width: 28px; height: 28px; font-size: 12px; }
+.user-btn {
+  border: 2px solid var(--surface); padding: 0; background: none; border-radius: 50%; cursor: pointer;
+  box-shadow: 0 0 0 1px var(--border); transition: box-shadow 0.15s;
+}
+.user-btn:hover { box-shadow: 0 0 0 3px var(--accent-soft); }
+.profile-head { display: flex; gap: 14px; align-items: center; margin-bottom: 18px; }
+.profile-head h3 { margin: 0 0 2px; }
+#pf-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-age { margin: -6px 0 14px; font-size: 13px; color: var(--text-2); }
+.partner-card { border: 1px solid var(--border); background: var(--surface-2); border-radius: 14px; padding: 14px; margin: 4px 0 14px; }
+.partner-card .p-top { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+.partner-card dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 13.5px; }
+.partner-card dt { color: var(--muted); }
+.partner-card dd { margin: 0; overflow-wrap: anywhere; }
+
+.chat-fab {
+  position: fixed; right: 24px; bottom: 24px; z-index: 30; width: 56px; height: 56px; border-radius: 50%;
+  border: 0; background: var(--accent); color: var(--accent-ink); font-size: 24px; cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22); transition: transform 0.15s;
+}
+.chat-fab:hover { transform: scale(1.06); }
+.chat-badge {
+  position: absolute; top: -2px; right: -2px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 99px;
+  background: var(--bad); color: #fff; font-size: 11.5px; font-weight: 700; display: grid; place-items: center;
+  border: 2px solid var(--bg);
+}
+.chat-panel {
+  position: fixed; right: 24px; bottom: 92px; z-index: 31; width: 370px; height: min(560px, calc(100vh - 120px));
+  background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; overflow: hidden;
+  animation: pop 0.18s ease;
+}
+.chat-head { display: flex; gap: 10px; align-items: center; padding: 12px 12px 12px 16px; border-bottom: 1px solid var(--border); }
+.chat-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 4px; background: var(--bg); }
+.chat-day { align-self: center; font-size: 11.5px; color: var(--muted); background: var(--surface-2); padding: 2px 10px; border-radius: 99px; margin: 10px 0 6px; }
+.msg { display: flex; gap: 8px; align-items: flex-end; max-width: 85%; }
+.msg.me { align-self: flex-end; flex-direction: row-reverse; }
+.msg .bubble {
+  padding: 8px 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border);
+  white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14.5px; line-height: 1.4;
+}
+.msg.me .bubble { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.msg .time { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+.msg.me .time { text-align: right; }
+.msg .avatar.sm { visibility: visible; }
+.msg.cont .avatar { visibility: hidden; }
+.msg.pending .bubble { opacity: 0.6; }
+.chat-empty { margin: auto; text-align: center; color: var(--muted); font-size: 14px; padding: 20px; }
+.chat-input { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border); align-items: flex-end; }
+.chat-input textarea { resize: none; height: 42px; max-height: 120px; padding: 10px 12px; border-radius: 12px; overflow-y: hidden; line-height: 1.35; }
+.chat-input .btn { height: 42px; width: 46px; padding: 0; font-size: 17px; }
+
+@media (max-width: 760px) {
+  .chat-fab { right: 16px; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); width: 52px; height: 52px; }
+  .chat-panel {
+    inset: 0; width: auto; height: auto; border-radius: 0; border: 0; z-index: 45; animation: none;
+    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .user-btn .avatar { width: 42px; height: 42px; }
+  body.chat-open .chat-fab, body.chat-open .sidebar { display: none; }
 }

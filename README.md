@@ -10,6 +10,8 @@ Website ghi lại các khoản thu chi hằng tháng và tiền tiết kiệm c�
 - **Tiết kiệm:** mục tiêu (Quỹ khẩn cấp, Mua nhà, Du lịch…), tiến độ, số tiền cần gửi mỗi tháng để kịp hạn; lịch sử gửi / rút.
 - **Nơi gửi & lãi suất:** ghi tiền gửi ở ngân hàng nào, két sắt ở nhà, ví điện tử, vàng…; sổ có kỳ hạn (1–36 tháng) và lãi suất %/năm do người dùng nhập; web tính tiền lãi dự kiến, ngày đáo hạn và nhắc sổ sắp đáo hạn.
 - **Cài đặt:** tên hai vợ chồng, ngân sách tháng, xuất / nhập dữ liệu (JSON), xuất giao dịch ra CSV để mở bằng Excel.
+- **Nhắn tin:** khung chat giữa hai vợ chồng (nút 💬 góc phải dưới), báo số tin chưa đọc.
+- **Hồ sơ:** bấm ảnh đại diện góc phải trên để xem / sửa họ tên, vai trò, ngày sinh, số điện thoại, nghề nghiệp, quê quán; xem hồ sơ của vợ / chồng; đăng xuất.
 - Giao diện **Sáng / Tối**, dùng tốt trên điện thoại.
 
 ## Cách dùng

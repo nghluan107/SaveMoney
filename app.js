@@ -161,22 +161,31 @@
     });
     auth.getRedirectResult().catch(loginError);
     $('#login-switch').addEventListener('click', () => auth.signOut());
-    $('#logout-btn').addEventListener('click', async () => {
-      if (await askConfirm('Đăng xuất khỏi tài khoản này?', 'Đăng xuất')) auth.signOut();
-    });
+    let loggedOut = false;
+    const logout = async () => {
+      if ($('#profile-modal').open) $('#profile-modal').close();
+      if (await askConfirm('Đăng xuất khỏi tài khoản này?', 'Đăng xuất')) { loggedOut = true; auth.signOut(); }
+    };
+    $('#logout-btn').addEventListener('click', logout);
+    $('#pf-logout').addEventListener('click', logout);
 
     auth.onAuthStateChanged((user) => {
       unsubs.forEach((u) => u()); unsubs = [];
       fbUser = user;
       if (!user) {
+        stopSocial();
         mode = 'local'; state = defaultState(); renderView();
-        showLogin('Đăng nhập để xem và ghi chép thu chi chung của gia đình.');
+        showLogin(loggedOut
+          ? '👋 Bạn đã đăng xuất. Đăng nhập lại để tiếp tục ghi chép thu chi của gia đình.'
+          : 'Đăng nhập để xem và ghi chép thu chi chung của gia đình.');
+        loggedOut = false;
         return;
       }
       $('#login-screen').hidden = true;
       mode = 'cloud';
       state = defaultState();
       subscribeAll();
+      startSocial(user);
       renderView();
     });
   }
@@ -194,6 +203,7 @@
       clearTimeout(timer);
       if (USE_FIREBASE && e && e.code === 'permission-denied') {
         unsubs.forEach((u) => u()); unsubs = [];
+        stopSocial();
         showLogin(`Tài khoản ${fbUser ? fbUser.email : ''} không có quyền xem sổ thu chi này. Hãy đăng nhập bằng email của chồng hoặc vợ.`, { hideButton: true, showSwitch: true });
         return;
       }
@@ -218,6 +228,245 @@
       done('settings', snap);
       scheduleRender();
     }));
+  }
+
+  // =========================================================
+  // HỒ SƠ & NHẮN TIN (chỉ khi đăng nhập Firebase)
+  // =========================================================
+  let profiles = {};       // uid -> hồ sơ
+  let messages = [];       // tin nhắn, cũ -> mới
+  let socialUnsubs = [];
+  let chatReady = false;   // đã nhận lần tải đầu (để không báo tin cũ là tin mới)
+  const ROLE_NAME = { chong: 'Chồng', vo: 'Vợ' };
+  const readKey = () => 'sm-chat-read-' + (fbUser ? fbUser.uid : '');
+  const getLastRead = () => { try { return Number(localStorage.getItem(readKey())) || 0; } catch (e) { return 0; } };
+  const setLastRead = (t) => { try { localStorage.setItem(readKey(), String(t)); } catch (e) { /* ignore */ } };
+
+  function myProfile() {
+    if (!fbUser) return {};
+    return profiles[fbUser.uid] || { name: fbUser.displayName || '', email: fbUser.email, photoURL: fbUser.photoURL || '' };
+  }
+  function partnerProfile() {
+    if (!fbUser) return null;
+    const uid = Object.keys(profiles).find((u) => u !== fbUser.uid);
+    return uid ? Object.assign({ uid }, profiles[uid]) : null;
+  }
+  function displayName(uid, fallback) {
+    const p = profiles[uid];
+    return (p && p.name) || fallback || 'Không rõ';
+  }
+  function initials(name) {
+    const parts = String(name || '?').trim().split(/\s+/);
+    return (parts[parts.length - 1] || '?').charAt(0).toUpperCase();
+  }
+  function avatarHtml(p) {
+    const name = (p && p.name) || '?';
+    return p && p.photoURL
+      ? `<img src="${esc(p.photoURL)}" alt="" referrerpolicy="no-referrer" />`
+      : esc(initials(name));
+  }
+  // Tuổi và số ngày tới sinh nhật
+  function ageInfo(bday) {
+    if (!bday) return '';
+    const [y, m, d] = bday.split('-').map(Number);
+    const t = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let age = t.getFullYear() - y - (t < new Date(t.getFullYear(), m - 1, d) ? 1 : 0);
+    let next = new Date(t.getFullYear(), m - 1, d);
+    if (next < t) next = new Date(t.getFullYear() + 1, m - 1, d);
+    const days = Math.round((next - t) / 864e5);
+    const bd = days === 0 ? '🎉 Hôm nay là sinh nhật!' : `🎂 Sinh nhật sau ${days} ngày`;
+    return age >= 0 && age < 150 ? `${age} tuổi · ${bd}` : '';
+  }
+
+  function startSocial(user) {
+    stopSocial();
+    if (!USE_FIREBASE) return;
+    $('#user-btn').hidden = false;
+    $('#chat-fab').hidden = false;
+    renderUserButton();
+    const warn = (e) => console.warn('Hồ sơ / tin nhắn:', e && e.code);
+    socialUnsubs.push(db.collection('profiles').onSnapshot((snap) => {
+      profiles = {};
+      snap.docs.forEach((d) => { profiles[d.id] = d.data(); });
+      // Lần đầu đăng nhập: tạo hồ sơ từ tài khoản Google
+      if (!snap.metadata.fromCache && !profiles[user.uid]) {
+        write(db.collection('profiles').doc(user.uid).set({
+          name: user.displayName || '', email: user.email || '', photoURL: user.photoURL || '', role: '', updated: Date.now(),
+        }, { merge: true }));
+      } else if (profiles[user.uid] && user.photoURL && profiles[user.uid].photoURL !== user.photoURL) {
+        write(db.collection('profiles').doc(user.uid).set({ photoURL: user.photoURL }, { merge: true }));
+      }
+      renderUserButton();
+      renderChat();
+      if ($('#profile-modal').open) renderPartnerCard();
+    }, warn));
+    socialUnsubs.push(db.collection('messages').orderBy('clientTime', 'desc').limit(200).onSnapshot((snap) => {
+      const prevIds = new Set(messages.map((m) => m.id));
+      messages = snap.docs.map((d) => Object.assign({ id: d.id, pending: d.metadata.hasPendingWrites }, d.data())).reverse();
+      if (chatReady && $('#chat-panel').hidden) {
+        const fresh = messages.filter((m) => !prevIds.has(m.id) && m.uid !== user.uid);
+        if (fresh.length) toast(`💬 ${displayName(fresh[0].uid, fresh[0].name)}: ${fresh[fresh.length - 1].text.slice(0, 60)}`);
+      }
+      chatReady = true;
+      renderChat();
+    }, warn));
+  }
+  function stopSocial() {
+    socialUnsubs.forEach((u) => u()); socialUnsubs = [];
+    profiles = {}; messages = []; chatReady = false;
+    const hide = (s) => { const el = document.querySelector(s); if (el) el.hidden = true; };
+    hide('#user-btn'); hide('#chat-fab'); hide('#chat-panel');
+    document.body.classList.remove('chat-open');
+    const pm = document.getElementById('profile-modal');
+    if (pm && pm.open) pm.close();
+  }
+
+  function renderUserButton() {
+    const p = myProfile();
+    $('#user-avatar').innerHTML = avatarHtml(p);
+    $('#user-btn').title = (p.name || 'Hồ sơ của tôi') + (p.email ? ' · ' + p.email : '');
+  }
+
+  // ---------- Hồ sơ ----------
+  function openProfile() {
+    const p = myProfile();
+    $('#pf-avatar').innerHTML = avatarHtml(p);
+    $('#pf-title').textContent = p.name || 'Hồ sơ của tôi';
+    $('#pf-email').textContent = (fbUser && fbUser.email) || '';
+    $('#pf-name').value = p.name || '';
+    $('#pf-role').value = p.role || '';
+    $('#pf-birthday').value = p.birthday || '';
+    $('#pf-phone').value = p.phone || '';
+    $('#pf-job').value = p.job || '';
+    $('#pf-hometown').value = p.hometown || '';
+    $('#pf-note').value = p.note || '';
+    updateAge();
+    renderPartnerCard();
+    $('#profile-modal').showModal();
+  }
+  function updateAge() {
+    const t = ageInfo($('#pf-birthday').value);
+    $('#pf-age').hidden = !t;
+    $('#pf-age').textContent = t;
+  }
+  function renderPartnerCard() {
+    const q = partnerProfile();
+    const box = $('#pf-partner');
+    box.hidden = !q;
+    if (!q) return;
+    const rows = [
+      ['Vai trò', ROLE_NAME[q.role]], ['Ngày sinh', q.birthday && fmtDate(q.birthday) + (ageInfo(q.birthday) ? ' · ' + ageInfo(q.birthday) : '')],
+      ['Điện thoại', q.phone], ['Nghề nghiệp', q.job], ['Quê quán', q.hometown], ['Email', q.email], ['Ghi chú', q.note],
+    ].filter((r) => r[1]);
+    box.innerHTML = `<div class="p-top"><span class="avatar">${avatarHtml(q)}</span>
+        <div><b>${esc(q.name || 'Chưa đặt tên')}</b><div class="muted small">${q.role === 'vo' ? 'Hồ sơ của vợ' : q.role === 'chong' ? 'Hồ sơ của chồng' : 'Người còn lại trong gia đình'}</div></div></div>
+      <dl>${rows.map((r) => `<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join('') || '<dd class="muted">Chưa cập nhật thông tin</dd>'}</dl>`;
+  }
+  async function saveProfile() {
+    const data = {
+      name: $('#pf-name').value.trim(), role: $('#pf-role').value, birthday: $('#pf-birthday').value,
+      phone: $('#pf-phone').value.trim(), job: $('#pf-job').value.trim(), hometown: $('#pf-hometown').value.trim(),
+      note: $('#pf-note').value.trim(), email: fbUser.email || '', photoURL: fbUser.photoURL || '', updated: Date.now(),
+    };
+    if (!data.name) { toast('Vui lòng nhập họ tên'); return; }
+    $('#profile-modal').close();
+    await write(db.collection('profiles').doc(fbUser.uid).set(data, { merge: true }));
+    // Đồng bộ tên vào danh sách thành viên (Chồng = người thứ 1, Vợ = người thứ 2)
+    const idx = data.role === 'chong' ? 0 : data.role === 'vo' ? 1 : -1;
+    if (idx >= 0 && state.members[idx] !== data.name) {
+      const members = [...state.members];
+      members[idx] = data.name;
+      await saveSettingsData(members, state.budget);
+    }
+    toast('✓ Đã lưu hồ sơ');
+  }
+
+  // ---------- Nhắn tin ----------
+  function msgTime(m) { return new Date(m.clientTime || Date.now()); }
+  function renderChat() {
+    const fab = document.getElementById('chat-fab');
+    if (!fab || !fbUser) return;
+    const open = !$('#chat-panel').hidden;
+    if (open && messages.length) setLastRead(Math.max(getLastRead(), messages[messages.length - 1].clientTime || 0));
+    const lastRead = getLastRead();
+    const unread = messages.filter((m) => m.uid !== fbUser.uid && (m.clientTime || 0) > lastRead).length;
+    $('#chat-badge').hidden = !unread;
+    $('#chat-badge').textContent = unread > 9 ? '9+' : String(unread);
+
+    const partner = partnerProfile();
+    $('#chat-title').textContent = partner && partner.name ? partner.name : 'Nhắn tin gia đình';
+    $('#chat-avatar').innerHTML = partner ? avatarHtml(partner) : '💬';
+    if (!open) return;
+
+    const body = $('#chat-body');
+    const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
+    if (!messages.length) {
+      body.innerHTML = '<div class="chat-empty"><div style="font-size:34px">💬</div>Chưa có tin nhắn nào.<br>Gửi lời nhắn đầu tiên cho vợ / chồng nhé!</div>';
+      return;
+    }
+    let html = '', lastDay = '', lastUid = null, lastT = 0;
+    messages.forEach((m) => {
+      const t = msgTime(m);
+      const day = ymd(t);
+      if (day !== lastDay) {
+        const today = ymd(new Date());
+        const yest = ymd(new Date(Date.now() - 864e5));
+        html += `<div class="chat-day">${day === today ? 'Hôm nay' : day === yest ? 'Hôm qua' : fmtDate(day)}</div>`;
+        lastDay = day; lastUid = null;
+      }
+      const me = m.uid === fbUser.uid;
+      const cont = m.uid === lastUid && t - lastT < 5 * 60e3;
+      const who = profiles[m.uid] || { name: m.name };
+      html += `<div class="msg ${me ? 'me' : ''} ${cont ? 'cont' : ''} ${m.pending ? 'pending' : ''}">
+        ${me ? '' : `<span class="avatar sm">${avatarHtml(who)}</span>`}
+        <div><div class="bubble">${esc(m.text)}</div>
+        <div class="time">${m.pending ? 'Đang gửi…' : pad(t.getHours()) + ':' + pad(t.getMinutes())}</div></div>
+      </div>`;
+      lastUid = m.uid; lastT = t;
+    });
+    body.innerHTML = html;
+    if (atBottom || body.dataset.first !== '1') { body.scrollTop = body.scrollHeight; body.dataset.first = '1'; }
+  }
+  function openChat() {
+    $('#chat-panel').hidden = false;
+    document.body.classList.add('chat-open');
+    $('#chat-body').dataset.first = '0';
+    renderChat();
+    if (window.innerWidth > 760) $('#chat-text').focus();
+  }
+  function closeChat() { $('#chat-panel').hidden = true; document.body.classList.remove('chat-open'); renderChat(); }
+  function sendMessage() {
+    const ta = $('#chat-text');
+    const text = ta.value.trim();
+    if (!text || !fbUser) return;
+    ta.value = ''; autoGrow();
+    const p = myProfile();
+    write(db.collection('messages').add({
+      text, uid: fbUser.uid, name: p.name || fbUser.displayName || fbUser.email || '',
+      clientTime: Date.now(), created: firebase.firestore.FieldValue.serverTimestamp(),
+    }));
+    const body = $('#chat-body');
+    body.dataset.first = '0';
+  }
+  function autoGrow() {
+    const ta = $('#chat-text');
+    ta.style.height = 'auto';
+    ta.style.height = Math.max(42, Math.min(ta.scrollHeight, 120)) + 'px';
+    ta.style.overflowY = ta.scrollHeight > 120 ? 'auto' : 'hidden';
+  }
+  function bindSocial() {
+    $('#user-btn').addEventListener('click', openProfile);
+    $('#pf-birthday').addEventListener('input', updateAge);
+    $('#profile-form').addEventListener('submit', (e) => { e.preventDefault(); saveProfile(); });
+    $('#chat-fab').addEventListener('click', () => ($('#chat-panel').hidden ? openChat() : closeChat()));
+    $('#chat-close').addEventListener('click', closeChat);
+    $('#chat-form').addEventListener('submit', (e) => { e.preventDefault(); sendMessage(); });
+    $('#chat-text').addEventListener('input', autoGrow);
+    $('#chat-text').addEventListener('keydown', (e) => {
+      // Enter để gửi, Shift+Enter để xuống dòng (trên điện thoại dùng nút Gửi)
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && window.innerWidth > 760) { e.preventDefault(); sendMessage(); }
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#chat-panel').hidden) closeChat(); });
   }
 
   async function guard(promise) {
@@ -1261,6 +1510,7 @@
 
   // ---------- Init ----------
   bind();
+  bindSocial();
   syncThemeButtons();
   switchView('dashboard');
   initStore();

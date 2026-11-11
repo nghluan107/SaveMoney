@@ -68,6 +68,7 @@
           </div>
           <button class="icon-btn theme-mobile" id="theme-toggle-mobile" aria-label="Đổi giao diện">🌓</button>
           <button class="btn primary" id="add-btn">＋ <span class="hide-sm">Thêm giao dịch</span></button>
+          <button class="user-btn" id="user-btn" hidden aria-label="Hồ sơ của tôi" title="Hồ sơ của tôi"><span class="avatar" id="user-avatar"></span></button>
         </div>
       </header>
 
@@ -377,6 +378,64 @@
       <button type="button" class="btn primary danger-fill" id="confirm-ok">Đồng ý</button>
     </div>
   </dialog>
+
+  <!-- Hồ sơ -->
+  <dialog id="profile-modal" class="modal">
+    <form method="dialog" id="profile-form">
+      <div class="profile-head">
+        <span class="avatar xl" id="pf-avatar"></span>
+        <div style="min-width:0">
+          <h3 id="pf-title">Hồ sơ của tôi</h3>
+          <div class="muted small" id="pf-email"></div>
+        </div>
+      </div>
+      <div class="row-2">
+        <label class="field"><span>Họ và tên</span><input id="pf-name" type="text" required maxlength="60" /></label>
+        <label class="field"><span>Vai trò</span>
+          <select id="pf-role">
+            <option value="">Chưa chọn</option>
+            <option value="chong">👨 Chồng</option>
+            <option value="vo">👩 Vợ</option>
+          </select>
+        </label>
+      </div>
+      <div class="row-2">
+        <label class="field"><span>Ngày sinh</span><input id="pf-birthday" type="date" /></label>
+        <label class="field"><span>Số điện thoại</span><input id="pf-phone" type="tel" inputmode="tel" maxlength="20" /></label>
+      </div>
+      <p class="pf-age" id="pf-age" hidden></p>
+      <div class="row-2">
+        <label class="field"><span>Nghề nghiệp</span><input id="pf-job" type="text" maxlength="60" /></label>
+        <label class="field"><span>Quê quán</span><input id="pf-hometown" type="text" maxlength="60" /></label>
+      </div>
+      <label class="field"><span>Ghi chú</span><textarea id="pf-note" rows="2" maxlength="300" placeholder="Sở thích, nhóm máu, ngày cưới…"></textarea></label>
+      <div class="partner-card" id="pf-partner" hidden></div>
+      <div class="modal-actions">
+        <button type="button" class="btn danger" id="pf-logout">Đăng xuất</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" data-close>Đóng</button>
+        <button type="submit" class="btn primary">Lưu</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Nhắn tin -->
+  <button class="chat-fab" id="chat-fab" hidden aria-label="Nhắn tin" title="Nhắn tin">💬<span class="chat-badge" id="chat-badge" hidden></span></button>
+  <section class="chat-panel" id="chat-panel" hidden aria-label="Nhắn tin">
+    <header class="chat-head">
+      <span class="avatar" id="chat-avatar"></span>
+      <div style="min-width:0;flex:1">
+        <b id="chat-title">Nhắn tin</b>
+        <div class="muted small">🔒 Chỉ hai vợ chồng xem được</div>
+      </div>
+      <button class="icon-btn" id="chat-close" aria-label="Đóng">✕</button>
+    </header>
+    <div class="chat-body" id="chat-body"></div>
+    <form class="chat-input" id="chat-form">
+      <textarea id="chat-text" rows="1" maxlength="2000" placeholder="Nhập tin nhắn…"></textarea>
+      <button class="btn primary" type="submit" aria-label="Gửi">➤</button>
+    </form>
+  </section>
 
   <div class="toast" id="toast"></div>
 
