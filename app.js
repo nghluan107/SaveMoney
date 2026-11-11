@@ -86,6 +86,9 @@
     const [text, cls] = map[s] || map.local;
     el.textContent = text;
     el.className = 'sync-pill ' + cls;
+    el.title = s === 'slow' || s === 'error'
+      ? 'Kiểm tra: máy có mạng không; trình chặn quảng cáo có chặn firestore.googleapis.com không; trên Firebase đã tạo Firestore Database chưa.'
+      : '';
   }
 
   let renderTimer = null;
@@ -183,7 +186,7 @@
     const pending = new Set([...COLLS, 'settings']);
     const timer = setTimeout(() => setSync('slow'), 10000);
     const done = (name, snap) => {
-      if (snap.metadata.fromCache) return;
+      if (snap.metadata.fromCache || !pending.has(name)) return;
       pending.delete(name);
       if (!pending.size) { clearTimeout(timer); setSync(canWrite ? 'cloud' : 'readonly'); }
     };
@@ -196,20 +199,25 @@
       }
       setSync('error');
     };
+    // Firebase: cần includeMetadataChanges để biết khi dữ liệu đã được máy chủ xác nhận
+    // (nếu không, khi dữ liệu trên máy giống máy chủ thì không có sự kiện nào báo "đã kết nối").
+    const listen = (ref, onNext) => (USE_FIREBASE
+      ? ref.onSnapshot({ includeMetadataChanges: true }, onNext, onErr)
+      : ref.onSnapshot(onNext, onErr));
     COLLS.forEach((name) => {
-      unsubs.push(db.collection(name).onSnapshot((snap) => {
+      unsubs.push(listen(db.collection(name), (snap) => {
         state[name] = snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
         done(name, snap);
         scheduleRender();
-      }, onErr));
+      }));
     });
-    unsubs.push(db.doc('settings/main').onSnapshot((snap) => {
+    unsubs.push(listen(db.doc('settings/main'), (snap) => {
       const d = snap.exists ? snap.data() : {};
       state.members = Array.isArray(d.members) && d.members.length ? [...d.members] : ['Chồng', 'Vợ'];
       state.budget = Number(d.budget) || 0;
       done('settings', snap);
       scheduleRender();
-    }, onErr));
+    }));
   }
 
   async function guard(promise) {
