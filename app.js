@@ -134,16 +134,29 @@
 
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
+    const ONLINE_URL = 'https://nghluan107.github.io/SaveMoney/';
+    const loginError = (e) => {
+      const code = (e && e.code) || 'unknown';
+      const hint = code === 'auth/unauthorized-domain'
+        ? 'Tên miền này chưa được thêm vào Firebase → Authentication → Settings → Authorized domains.'
+        : 'Đăng nhập không thành công, hãy thử lại.';
+      showLogin(hint + ' (Mã lỗi: ' + code + ')');
+    };
     $('#login-btn').addEventListener('click', async () => {
+      if (location.protocol === 'file:') {
+        showLogin('Google không cho đăng nhập khi mở file trên máy. Hãy mở web tại ' + ONLINE_URL);
+        return;
+      }
       try { await auth.signInWithPopup(provider); }
       catch (e) {
         if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment')) {
-          auth.signInWithRedirect(provider);
+          auth.signInWithRedirect(provider).catch(loginError);
         } else if (e && e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
-          toast('⚠️ Đăng nhập không thành công, hãy thử lại');
+          loginError(e);
         }
       }
     });
+    auth.getRedirectResult().catch(loginError);
     $('#login-switch').addEventListener('click', () => auth.signOut());
     $('#logout-btn').addEventListener('click', async () => {
       if (await askConfirm('Đăng xuất khỏi tài khoản này?', 'Đăng xuất')) auth.signOut();
