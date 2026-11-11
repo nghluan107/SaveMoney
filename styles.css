@@ -344,7 +344,11 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
   .brand, .sidebar-foot { display: none; }
   .nav { flex-direction: row; width: 100%; justify-content: space-around; }
   .nav-item { flex-direction: column; gap: 2px; padding: 6px 4px; font-size: 11px; flex: 1; text-align: center; align-items: center; }
-  .main { padding: 18px 16px 96px; }
+  .main {
+    padding: calc(18px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(96px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  }
+  /* iPhone: chữ trong ô nhập >= 16px để Safari không tự phóng to */
+  input[type="text"], input[type="search"], input[type="date"], select { font-size: 16px; }
   .theme-mobile { display: inline-grid; place-items: center; }
   .hide-sm { display: none; }
   .topbar { flex-direction: column; align-items: stretch; }
