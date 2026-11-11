@@ -838,7 +838,7 @@
         return `<li class="tx-item" data-dep="${d.id}">
           <div class="tx-icon" style="background:color-mix(in srgb, var(--s-saving) 16%, transparent)">${goal ? goal.icon : '🐷'}</div>
           <div style="min-width:0"><div class="tx-title">${esc(d.note) || (isIn ? 'Gửi tiết kiệm' : 'Rút tiết kiệm')}</div>
-          <div class="tx-meta">${goal ? esc(goal.name) : 'Không rõ'} · ${d.place ? placeIcon(d) + ' ' + esc(placeLabel(d)) + ' · ' : ''}${isIn && d.term ? d.term + ' th · ' : ''}${isIn && d.rate && hasInterest(d.place) ? fmtRate(d.rate) + ' · ' : ''}${esc(memberName(d.member))} · ${fmtDate(d.date)}</div></div>
+          <div class="tx-meta">${goal ? esc(goal.name) : 'Tiết kiệm chung'} · ${d.place ? placeIcon(d) + ' ' + esc(placeLabel(d)) + ' · ' : ''}${isIn && d.term ? d.term + ' th · ' : ''}${isIn && d.rate && hasInterest(d.place) ? fmtRate(d.rate) + ' · ' : ''}${esc(memberName(d.member))} · ${fmtDate(d.date)}</div></div>
           <div class="tx-amt ${isIn ? 'in' : ''}">${isIn ? '+' : '−'}${fmt(Math.abs(d.amount))}</div>
         </li>`;
       }).join('')
@@ -896,7 +896,7 @@
           <div class="tx-amt in" title="Tiền lãi dự kiến">+${fmt(info.interest)}</div>
         </li>`;
       }).join('')
-      : '<li class="empty">Chưa có sổ nào. Khi gửi tiền vào ngân hàng, chọn kỳ hạn và nhập lãi suất để web tính tiền lãi và ngày đáo hạn.</li>';
+      : '<li class="empty">Chưa có sổ nào. Bấm <b>＋ Thêm sổ tiết kiệm</b> để ghi khoản gửi ngân hàng, kỳ hạn và lãi suất.</li>';
   }
 
   // ---------- Settings ----------
@@ -969,20 +969,19 @@
 
   // --- Deposit modal ---
   let depEditing = null, depType = 'in';
-  function openDep(d) {
-    if (!state.goals.length) { toast('Hãy tạo một mục tiêu tiết kiệm trước'); openGoal(); return; }
+  function openDep(d, preset) {
     depEditing = d || null;
     depType = d && d.amount < 0 ? 'out' : 'in';
     $$('#dep-type-seg button').forEach((b) => b.classList.toggle('active', b.dataset.type === depType));
-    $('#dep-goal').innerHTML = state.goals.map((g) => `<option value="${g.id}">${g.icon} ${esc(g.name)}</option>`).join('');
-    if (d) $('#dep-goal').value = d.goalId;
+    $('#dep-goal').innerHTML = '<option value="">💰 Tiết kiệm chung (không thuộc mục tiêu)</option>' + state.goals.map((g) => `<option value="${g.id}">${g.icon} ${esc(g.name)}</option>`).join('');
+    $('#dep-goal').value = d ? d.goalId || '' : (state.goals.length === 1 ? state.goals[0].id : '');
     $('#dep-amount').value = d ? nf.format(Math.abs(d.amount)) : '';
     $('#dep-date').value = d ? d.date : defaultDate();
     $('#dep-note').value = d ? d.note || '' : '';
     fillMembers($('#dep-member'), d ? d.member : lastMember());
-    $('#dep-place').value = (d && d.place) || 'bank';
+    $('#dep-place').value = (d && d.place) || (preset && preset.place) || 'bank';
     $('#dep-bank').value = d ? d.bank || '' : '';
-    $('#dep-term').value = String((d && d.term) || 0);
+    $('#dep-term').value = String((d && d.term) || (preset && preset.term) || 0);
     $('#dep-rate').value = d && d.rate ? String(d.rate).replace('.', ',') : '';
     updateDepFields();
     $('#dep-delete').hidden = !d;
@@ -1149,6 +1148,7 @@
 
     // deposit modal
     $('#add-deposit-btn').addEventListener('click', () => openDep());
+    $('#add-book-btn').addEventListener('click', () => { depType = 'in'; openDep(null, { place: 'bank', term: 6 }); });
     $('#dep-type-seg').addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return;
       depType = b.dataset.type;
